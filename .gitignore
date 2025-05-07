@@ -14,6 +14,7 @@ frontend/.yarn/*
 
 frontend/.next/
 frontend/out/
+frontend/.env
 frontend/.env.local
 frontend/next-env.d.ts
 frontend/*.tsbuildinfo
@@ -25,6 +26,13 @@ frontend/.DS_Store
 # ========================
 backend/node_modules/
 backend/.env
+backend/.env.local
+backend/.env.*.local
+
+backend/dist/
+backend/build/
+backend/*.tsbuildinfo
+
 
 # ========================
 # 🧪 Testing
