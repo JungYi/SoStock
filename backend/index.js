@@ -12,11 +12,21 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
+// Import routers
+const inventoryRoutes = require('./routes/inventory');
+const orderRoutes = require('./routes/order');
+const receiptRoutes = require('./routes/receipt');
+
+// Mount routers
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/order', orderRoutes);
+app.use('/api/receipt', receiptRoutes);
+
 // Default Route
 app.get('/', (req, res) => {
   res.send('API running');
 });
 
 // Run the server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
