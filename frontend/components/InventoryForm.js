@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../services/api';
+import toast from 'react-hot-toast';
 
 const VALID_UNITS = ['pcs', 'kg', 'g', 'ml', 'l', 'pack'];
 const DEFAULT = { name: '', category: '', quantity: '', unit: 'pcs' };
@@ -30,9 +31,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [serverError, setServerError] = useState('');
 
-  // refs for first-error focus
   const nameRef = useRef(null);
   const categoryRef = useRef(null);
   const quantityRef = useRef(null);
@@ -49,12 +48,10 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
       });
       setErrors({});
       setTouched({});
-      setServerError('');
     } else {
       setForm(DEFAULT);
       setErrors({});
       setTouched({});
-      setServerError('');
     }
   }, [editItem]);
 
@@ -70,7 +67,6 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-    setServerError(''); // 입력 시 서버 에러 배너 숨김
   };
 
   const onBlur = (e) => {
@@ -88,7 +84,6 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    // 모든 필드를 touched 처리 후 최종 검증
     setTouched({ name: true, category: true, quantity: true, unit: true });
     const finalErrors = validate(form);
     setErrors(finalErrors);
@@ -98,7 +93,6 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
     }
 
     setSubmitting(true);
-    setServerError('');
     try {
       const payload = {
         name: sanitize(form.name),
@@ -106,24 +100,24 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
         quantity: Number(form.quantity),
         unit: form.unit,
       };
-      if (editItem) {
-        await api.put(`/inventory/${editItem._id}`, payload);
-        onUpdate?.();
-      } else {
-        await api.post('/inventory', payload);
-        onAdd?.();
-      }
+
+      const request = editItem
+        ? api.put(`/inventory/${editItem._id}`, payload)
+        : api.post('/inventory', payload);
+
+      await toast.promise(
+        request,
+        {
+          loading: editItem ? 'Updating item…' : 'Adding item…',
+          success: editItem ? 'Item updated' : 'Item added',
+          error: (err) => err?.response?.data?.error || 'Failed to save item.',
+        },
+        { duration: 3500 }
+      );
+
       setForm(DEFAULT);
       setTouched({});
-    } catch (err) {
-      const serverMsg = err?.response?.data?.error || 'Failed to save item.';
-      setServerError(serverMsg);
-      // 서버 에러가 난 경우 포커스를 배너로 이동
-      // 다음 페인트 후 포커스 이동을 위해 setTimeout
-      setTimeout(() => {
-        const banner = document.getElementById('form-error-banner');
-        banner?.focus();
-      }, 0);
+      if (editItem) onUpdate?.(); else onAdd?.();
     } finally {
       setSubmitting(false);
     }
@@ -134,18 +128,6 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
       <h2 className="text-xl font-semibold">
         {editItem ? 'Edit Inventory Item' : 'Add Inventory Item'}
       </h2>
-
-      {serverError && (
-        <div
-          id="form-error-banner"
-          tabIndex={-1}
-          role="alert"
-          aria-live="assertive"
-          className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 rounded"
-        >
-          {serverError}
-        </div>
-      )}
 
       <div>
         <input
