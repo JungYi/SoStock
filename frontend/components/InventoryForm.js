@@ -30,6 +30,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState('');
 
   // refs for first-error focus
   const nameRef = useRef(null);
@@ -48,26 +49,28 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
       });
       setErrors({});
       setTouched({});
+      setServerError('');
     } else {
       setForm(DEFAULT);
       setErrors({});
       setTouched({});
+      setServerError('');
     }
   }, [editItem]);
 
   const currentErrors = useMemo(() => validate(form), [form]);
+  const isValid = useMemo(() => Object.keys(currentErrors).length === 0, [currentErrors]);
 
   const showError = (field) =>
     touched[field] ? (errors[field] || currentErrors[field]) : null;
 
   const inputCls = (field) =>
-    `border px-2 py-1 w-full ${
-      showError(field) ? 'border-red-600' : 'border-gray-300'
-    }`;
+    `border px-2 py-1 w-full ${showError(field) ? 'border-red-600' : 'border-gray-300'}`;
 
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    setServerError(''); // 입력 시 서버 에러 배너 숨김
   };
 
   const onBlur = (e) => {
@@ -79,12 +82,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
     const order = ['name', 'category', 'quantity', 'unit'];
     const first = order.find((f) => errs[f]);
     if (!first) return;
-    const map = {
-      name: nameRef,
-      category: categoryRef,
-      quantity: quantityRef,
-      unit: unitRef,
-    };
+    const map = { name: nameRef, category: categoryRef, quantity: quantityRef, unit: unitRef };
     map[first]?.current?.focus();
   };
 
@@ -100,6 +98,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
     }
 
     setSubmitting(true);
+    setServerError('');
     try {
       const payload = {
         name: sanitize(form.name),
@@ -118,7 +117,13 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
       setTouched({});
     } catch (err) {
       const serverMsg = err?.response?.data?.error || 'Failed to save item.';
-      alert(serverMsg);
+      setServerError(serverMsg);
+      // 서버 에러가 난 경우 포커스를 배너로 이동
+      // 다음 페인트 후 포커스 이동을 위해 setTimeout
+      setTimeout(() => {
+        const banner = document.getElementById('form-error-banner');
+        banner?.focus();
+      }, 0);
     } finally {
       setSubmitting(false);
     }
@@ -129,6 +134,18 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
       <h2 className="text-xl font-semibold">
         {editItem ? 'Edit Inventory Item' : 'Add Inventory Item'}
       </h2>
+
+      {serverError && (
+        <div
+          id="form-error-banner"
+          tabIndex={-1}
+          role="alert"
+          aria-live="assertive"
+          className="border border-red-600 bg-red-50 text-red-700 px-3 py-2 rounded"
+        >
+          {serverError}
+        </div>
+      )}
 
       <div>
         <input
@@ -143,7 +160,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
           aria-describedby="name-error"
         />
         {showError('name') && (
-          <p id="name-error" className="text-red-600 text-sm mt-1">
+          <p id="name-error" className="text-red-600 text-sm mt-1" aria-live="polite">
             {showError('name')}
           </p>
         )}
@@ -162,7 +179,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
           aria-describedby="category-error"
         />
         {showError('category') && (
-          <p id="category-error" className="text-red-600 text-sm mt-1">
+          <p id="category-error" className="text-red-600 text-sm mt-1" aria-live="polite">
             {showError('category')}
           </p>
         )}
@@ -185,7 +202,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
           aria-describedby="quantity-error"
         />
         {showError('quantity') && (
-          <p id="quantity-error" className="text-red-600 text-sm mt-1">
+          <p id="quantity-error" className="text-red-600 text-sm mt-1" aria-live="polite">
             {showError('quantity')}
           </p>
         )}
@@ -209,7 +226,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
           ))}
         </select>
         {showError('unit') && (
-          <p id="unit-error" className="text-red-600 text-sm mt-1">
+          <p id="unit-error" className="text-red-600 text-sm mt-1" aria-live="polite">
             {showError('unit')}
           </p>
         )}
@@ -217,7 +234,7 @@ const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
 
       <button
         type="submit"
-        disabled={submitting}
+        disabled={submitting || !isValid}
         className="bg-black text-white px-4 py-2 rounded disabled:opacity-60"
       >
         {editItem ? 'Update' : 'Add'}
