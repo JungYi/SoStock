@@ -1,20 +1,22 @@
-// frontend/pages/order.js
 import { useEffect, useState } from "react";
+import OrderForm from "../components/OrderForm";
 
 export default function OrderList() {
   const [orders, setOrders] = useState([]);
+  const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
     fetch("http://localhost:5050/api/order")
       .then((res) => res.json())
       .then((data) => setOrders(data))
       .catch((err) => console.error("❌ Failed to fetch orders:", err));
-  }, []);
+  }, [refresh]);
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Orders</h1>
+    <div className="p-6 space-y-6">
+      <OrderForm onCreated={() => setRefresh((n) => n + 1)} />
 
+      <h1 className="text-2xl font-bold">Orders</h1>
       <table className="w-full border border-gray-300 text-left">
         <thead className="bg-gray-100">
           <tr>
