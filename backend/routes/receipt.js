@@ -1,14 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const {
+  getReceipts,
+  getReceiptById,
+  createReceipt,
+  deleteReceipt,
+} = require('../controllers/receiptController');
 
-// [GET] /api/receipt
-router.get('/', (req, res) => {
-  res.json({ message: 'Receipt list (placeholder)' });
-});
-
-// [POST] /api/receipt
-router.post('/', (req, res) => {
-  res.json({ message: 'Create receipt (placeholder)' });
-});
+router.get('/', getReceipts);
+router.get('/:id', getReceiptById);
+router.post('/', createReceipt);
+router.delete('/:id', deleteReceipt); // optional
 
 module.exports = router;
