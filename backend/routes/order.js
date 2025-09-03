@@ -1,20 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const {
-  createOrder,
-  getOrders,
-  getOrderById,
-  updateOrder,
-  updateOrderStatus,
-  deleteOrder
-} = require('../controllers/orderController');
+const core = require('../controllers/orderController');
+const integ = require('../controllers/orderIntegrationsController');
 
-// Order CRUD
-router.post('/', createOrder);                 // Create
-router.get('/', getOrders);                    // List
-router.get('/:id', getOrderById);              // Detail
-router.put('/:id', updateOrder);               // Update (non-status)
-router.patch('/:id/status', updateOrderStatus);// Status only
-router.delete('/:id', deleteOrder);            // Optional
+router.post('/', core.createOrder);
+router.get('/', core.getOrders);
+router.get('/:id', core.getOrderById);
+router.put('/:id', core.updateOrder);
+router.patch('/:id/status', core.updateOrderStatus);
+router.delete('/:id', core.deleteOrder);
+
+// integrations
+router.get('/:id/remaining', integ.getOrderRemaining);
+router.post('/:id/receipt', integ.createReceiptFromOrder);
 
 module.exports = router;

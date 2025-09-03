@@ -67,8 +67,19 @@ const createReceipt = async (req, res) => {
       );
     }
 
-    // (선택) orderId가 있고, 모든 아이템 수량이 충족되면 Order.status='received' 로 바꾸는 로직은 추후 단계에서.
-
+    // (선택) orderId가 있고, 모든 아이템 수량이 충족되면 Order.status='received' 로 바꾸는 로직
+    if (orderId) {
+      try {
+        const saved = await createReceiptForOrder(
+          { orderId, items, notes, receivedAt },
+          true,
+        );
+        return res.status(201).json(saved);
+      } catch (e) {
+        return res.status(400).json({ error: e.message || 'Failed to create receipt.' });
+      }
+    }
+    
     return res.status(201).json(saved);
   } catch (err) {
     return res.status(500).json({ error: 'Failed to create receipt.' });

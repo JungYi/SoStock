@@ -30,7 +30,11 @@ const createOrder = async (req, res) => {
 const getOrders = async (req, res) => {
   try {
     const { status } = req.query;
-    const filter = status ? { status } : {};
+    let filter = {};
+    if (status) {
+      const arr = String(status).split(',').map((s) => s.trim());
+      filter.status = { $in: arr };
+    }
     const list = await Order.find(filter).sort({ createdAt: -1 });
     return res.json(list);
   } catch (err) {
