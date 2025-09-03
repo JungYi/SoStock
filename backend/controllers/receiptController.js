@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Receipt = require('../models/Receipt');
 const Inventory = require('../models/Inventory');
+const { createReceiptForOrder } = require('../services/receiptService');
 
 const isValidId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -27,24 +28,38 @@ const getReceiptById = async (req, res) => {
   }
 };
 
-/** [POST] /api/receipt - Create receipt and increase inventory quantities */
+/** [POST] /api/receipt - Create receipt
+ * If orderId is provided → delegate to service (atomic: receipt + inventory + order)
+ * Else → standalone receipt + inventory increment
+ */
 const createReceipt = async (req, res) => {
   try {
     const { orderId, items, receivedAt, notes } = req.body;
 
+    // If linked to an order → use core service (do NOT duplicate work here)
+    if (orderId && isValidId(orderId)) {
+      try {
+        const saved = await createReceiptForOrder(
+          { orderId, items, notes, receivedAt },
+          true,
+        );
+        return res.status(201).json(saved);
+      } catch (e) {
+        return res.status(400).json({ error: e.message || 'Failed to create receipt.' });
+      }
+    }
+
+    // Standalone receipt path (no orderId)
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'At least one item is required.' });
     }
-
     for (const it of items) {
       if (!it.itemId || !isValidId(it.itemId) || !it.name || !it.quantity || it.quantity < 1) {
         return res.status(400).json({ error: 'Invalid item in receipt.' });
       }
     }
 
-    // 1) Save receipt document
     const receipt = new Receipt({
-      orderId: orderId && isValidId(orderId) ? orderId : undefined,
       items: items.map((it) => ({
         itemId: it.itemId,
         name: it.name.trim(),
@@ -58,7 +73,7 @@ const createReceipt = async (req, res) => {
 
     const saved = await receipt.save();
 
-    // 2) Increase inventory quantities (sequential for clarity)
+    // Increase inventory quantities
     for (const it of saved.items) {
       await Inventory.findByIdAndUpdate(
         it.itemId,
@@ -67,26 +82,13 @@ const createReceipt = async (req, res) => {
       );
     }
 
-    // (선택) orderId가 있고, 모든 아이템 수량이 충족되면 Order.status='received' 로 바꾸는 로직
-    if (orderId) {
-      try {
-        const saved = await createReceiptForOrder(
-          { orderId, items, notes, receivedAt },
-          true,
-        );
-        return res.status(201).json(saved);
-      } catch (e) {
-        return res.status(400).json({ error: e.message || 'Failed to create receipt.' });
-      }
-    }
-    
     return res.status(201).json(saved);
   } catch (err) {
     return res.status(500).json({ error: 'Failed to create receipt.' });
   }
 };
 
-/** [DELETE] /api/receipt/:id - Optional: delete receipt and revert inventory (simple) */
+/** [DELETE] /api/receipt/:id - delete receipt and revert inventory (simple) */
 const deleteReceipt = async (req, res) => {
   try {
     const { id } = req.params;
@@ -95,7 +97,6 @@ const deleteReceipt = async (req, res) => {
     const doc = await Receipt.findById(id);
     if (!doc) return res.status(404).json({ error: 'Receipt not found.' });
 
-    // Revert inventory quantities (simple reverse)
     for (const it of doc.items) {
       await Inventory.findByIdAndUpdate(
         it.itemId,
