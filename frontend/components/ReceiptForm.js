@@ -11,6 +11,21 @@ import api from '../services/api';
  * Props:
  * - onCreated?: () => void
  */
+
+// Step helper
+const stepForUnit = (u) => {
+  const unit = String(u || '').toLowerCase();
+  if (['pcs', 'ea', 'bag', 'pack'].includes(unit)) return '1'; // 정수만
+  if (['kg', 'g', 'l', 'ml'].includes(unit)) return '0.001'; // 소수 허용
+  return '1'; // 기본값: 보수적으로 정수
+};
+
+// Integer-only check
+const isIntegerUnit = (u) => {
+  const unit = String(u || '').toLowerCase();
+  return ['pcs', 'ea', 'bag', 'pack'].includes(unit);
+};
+
 const ReceiptForm = ({ onCreated }) => {
   // Orders (pending/partial) for prefill
   const [orders, setOrders] = useState([]);
@@ -57,7 +72,6 @@ const ReceiptForm = ({ onCreated }) => {
     setSelectedOrderId(orderId);
     setError('');
     if (!orderId) {
-      // Reset to single blank row
       setItems([{ itemId: '', name: '', unit: '', quantity: 1, unitPrice: 0 }]);
       return;
     }
@@ -120,8 +134,16 @@ const ReceiptForm = ({ onCreated }) => {
     for (const it of items) {
       if (!it.itemId) return 'Please select an inventory item.';
       if (!it.name?.trim()) return 'Item name is missing.';
-      if (Number(it.quantity) < 1) return 'Quantity must be ≥ 1.';
-      if (Number(it.unitPrice) < 0) return 'Unit price cannot be negative.';
+
+      const qty = Number(it.quantity);
+      if (!Number.isFinite(qty) || qty < 1) return 'Quantity must be ≥ 1.';
+
+      if (isIntegerUnit(it.unit) && !Number.isInteger(qty)) {
+        return `Quantity must be an integer for unit "${it.unit}".`;
+      }
+
+      const up = Number(it.unitPrice || 0);
+      if (!Number.isFinite(up) || up < 0) return 'Unit price cannot be negative.';
     }
     return '';
   };
@@ -153,18 +175,15 @@ const ReceiptForm = ({ onCreated }) => {
       setSubmitting(true);
 
       if (selectedOrderId) {
-        // Delegate to order-integrated endpoint (server handles remaining/status)
         await api.post(`/order/${selectedOrderId}/receipt`, {
-          items: payload.items, // allow user-edited quantities/prices
+          items: payload.items,
           receivedAt: payload.receivedAt,
           notes: payload.notes,
         });
       } else {
-        // Standalone receipt
         await api.post('/receipt', payload);
       }
 
-      // Reset form
       setItems([{ itemId: '', name: '', unit: '', quantity: 1, unitPrice: 0 }]);
       setReceivedAt('');
       setNotes('');
@@ -173,9 +192,7 @@ const ReceiptForm = ({ onCreated }) => {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
-      const msgText =
-        e?.response?.data?.error ||
-        'Failed to create receipt.';
+      const msgText = e?.response?.data?.error || 'Failed to create receipt.';
       setError(msgText);
     } finally {
       setSubmitting(false);
@@ -225,7 +242,7 @@ const ReceiptForm = ({ onCreated }) => {
                       className="border px-2 py-1 w-full"
                       value={it.itemId}
                       onChange={(e) => handleItemChange(idx, 'itemId', e.target.value)}
-                      disabled={!!selectedOrderId} // order-selected rows are prefilled
+                      disabled={!!selectedOrderId}
                     >
                       <option value="">Select item…</option>
                       {inventory.map((inv) => (
@@ -238,7 +255,9 @@ const ReceiptForm = ({ onCreated }) => {
                   <td className="p-2 border">
                     <input
                       type="number"
+                      inputMode="decimal"
                       min="1"
+                      step={stepForUnit(it.unit)}
                       className="border px-2 py-1 w-24"
                       value={it.quantity}
                       onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
@@ -255,6 +274,7 @@ const ReceiptForm = ({ onCreated }) => {
                   <td className="p-2 border">
                     <input
                       type="number"
+                      inputMode="decimal"
                       min="0"
                       step="0.01"
                       className="border px-2 py-1 w-28"
@@ -281,7 +301,7 @@ const ReceiptForm = ({ onCreated }) => {
                     type="button"
                     className="bg-gray-800 text-white px-3 py-1 rounded"
                     onClick={addRow}
-                    disabled={!!selectedOrderId} // if prefilled from order, lock row structure
+                    disabled={!!selectedOrderId}
                     title={selectedOrderId ? 'Modify quantities/prices only' : 'Add a new row'}
                   >
                     + Add Item
