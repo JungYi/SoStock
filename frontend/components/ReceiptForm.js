@@ -2,15 +2,21 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
 
 /**
- * Create Receipt (increase inventory quantities)
- * - Fetch inventory options
- * - Build items array
- * - POST /api/receipt
+ * ReceiptForm
+ * - Optionally select an Order (pending/partial) to prefill items.
+ * - Build receipt items and POST:
+ *   - If order selected: POST /api/order/:orderId/receipt
+ *   - Else: POST /api/receipt
  *
  * Props:
  * - onCreated?: () => void
  */
 const ReceiptForm = ({ onCreated }) => {
+  // Orders (pending/partial) for prefill
+  const [orders, setOrders] = useState([]);
+  const [selectedOrderId, setSelectedOrderId] = useState('');
+
+  // Inventory for manual add (when no order selected, or to tweak unit)
   const [inventory, setInventory] = useState([]);
   const invMap = useMemo(() => {
     const m = new Map();
@@ -18,30 +24,67 @@ const ReceiptForm = ({ onCreated }) => {
     return m;
   }, [inventory]);
 
+  // Form state
   const [items, setItems] = useState([
     { itemId: '', name: '', unit: '', quantity: 1, unitPrice: 0 },
   ]);
-
   const [receivedAt, setReceivedAt] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Load inventory
+  // Load orders (pending, partial) & inventory
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await api.get('/inventory');
-        setInventory(res.data || []);
+        const [ordersRes, invRes] = await Promise.all([
+          api.get('/order', { params: { status: 'pending,partial' } }),
+          api.get('/inventory'),
+        ]);
+        setOrders(ordersRes.data || []);
+        setInventory(invRes.data || []);
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error(e);
-        setError('Failed to load inventory list.');
+        setError('Failed to load orders/inventory.');
       }
     };
     load();
   }, []);
 
+  // When an order is selected, prefill using remaining table
+  const handleOrderSelect = async (orderId) => {
+    setSelectedOrderId(orderId);
+    setError('');
+    if (!orderId) {
+      // Reset to single blank row
+      setItems([{ itemId: '', name: '', unit: '', quantity: 1, unitPrice: 0 }]);
+      return;
+    }
+    try {
+      const res = await api.get(`/order/${orderId}/remaining`);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      if (rows.length === 0) {
+        setItems([{ itemId: '', name: '', unit: '', quantity: 1, unitPrice: 0 }]);
+        return;
+      }
+      setItems(
+        rows.map((r) => ({
+          itemId: r.itemId,
+          name: r.name,
+          unit: r.unit || 'pcs',
+          quantity: r.remaining > 0 ? r.remaining : 1,
+          unitPrice: r.unitPrice || 0,
+        })),
+      );
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(e);
+      setError('Failed to prefill from order.');
+    }
+  };
+
+  // Row edits
   const handleItemChange = (idx, field, value) => {
     setItems((prev) => {
       const next = [...prev];
@@ -71,6 +114,7 @@ const ReceiptForm = ({ onCreated }) => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Validation
   const validate = () => {
     if (!items.length) return 'At least one item is required.';
     for (const it of items) {
@@ -82,6 +126,7 @@ const ReceiptForm = ({ onCreated }) => {
     return '';
   };
 
+  // Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -106,16 +151,32 @@ const ReceiptForm = ({ onCreated }) => {
 
     try {
       setSubmitting(true);
-      await api.post('/receipt', payload);
-      // reset
+
+      if (selectedOrderId) {
+        // Delegate to order-integrated endpoint (server handles remaining/status)
+        await api.post(`/order/${selectedOrderId}/receipt`, {
+          items: payload.items, // allow user-edited quantities/prices
+          receivedAt: payload.receivedAt,
+          notes: payload.notes,
+        });
+      } else {
+        // Standalone receipt
+        await api.post('/receipt', payload);
+      }
+
+      // Reset form
       setItems([{ itemId: '', name: '', unit: '', quantity: 1, unitPrice: 0 }]);
       setReceivedAt('');
       setNotes('');
+      setSelectedOrderId('');
       if (typeof onCreated === 'function') onCreated();
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(e);
-      setError('Failed to create receipt.');
+      const msgText =
+        e?.response?.data?.error ||
+        'Failed to create receipt.';
+      setError(msgText);
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +186,24 @@ const ReceiptForm = ({ onCreated }) => {
     <form onSubmit={handleSubmit} className="space-y-4 border rounded p-4">
       <h2 className="text-xl font-semibold">Create Receipt</h2>
 
-      {/* Items */}
+      {/* Order selector (optional) */}
+      <div>
+        <label className="block text-sm mb-1">Select Order (pending/partial)</label>
+        <select
+          className="border px-2 py-1 w-full"
+          value={selectedOrderId}
+          onChange={(e) => handleOrderSelect(e.target.value)}
+        >
+          <option value="">-- None --</option>
+          {orders.map((o) => (
+            <option key={o._id} value={o._id}>
+              {o.supplier} · {new Date(o.createdAt).toLocaleDateString()} · {o.status}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Items table */}
       <div>
         <label className="block text-sm mb-2">Items</label>
         <div className="overflow-x-auto">
@@ -147,6 +225,7 @@ const ReceiptForm = ({ onCreated }) => {
                       className="border px-2 py-1 w-full"
                       value={it.itemId}
                       onChange={(e) => handleItemChange(idx, 'itemId', e.target.value)}
+                      disabled={!!selectedOrderId} // order-selected rows are prefilled
                     >
                       <option value="">Select item…</option>
                       {inventory.map((inv) => (
@@ -202,6 +281,8 @@ const ReceiptForm = ({ onCreated }) => {
                     type="button"
                     className="bg-gray-800 text-white px-3 py-1 rounded"
                     onClick={addRow}
+                    disabled={!!selectedOrderId} // if prefilled from order, lock row structure
+                    title={selectedOrderId ? 'Modify quantities/prices only' : 'Add a new row'}
                   >
                     + Add Item
                   </button>
