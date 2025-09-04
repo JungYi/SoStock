@@ -3,17 +3,29 @@ const Order = require('../models/Order');
 const Receipt = require('../models/Receipt');
 const Inventory = require('../models/Inventory');
 
-// ---- helpers ----
+/* ----------------------- helpers ----------------------- */
+
+// safe number cast with default
 const toNum = (v, d = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
 };
 
-const mget = (m, key) => {
-  if (!m) return undefined;
-  return (m instanceof Map) ? m.get(key) : m[key];
+// rounding to avoid fp drift
+const roundTo = (v, dp = 3) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  const m = 10 ** dp;
+  return Math.round(n * m) / m;
 };
 
+// Map or plain object → get by key
+const mget = (m, key) => {
+  if (!m) return undefined;
+  return m instanceof Map ? m.get(key) : m[key];
+};
+
+// Map or plain object → set numeric value by key
 const mset = (m, key, val) => {
   const n = toNum(val, 0);
   if (m instanceof Map) {
@@ -24,14 +36,20 @@ const mset = (m, key, val) => {
   }
 };
 
-// ---- core calc ----
+// unit helpers
+const integerUnits = ['pcs', 'ea', 'bag', 'pack'];
+const isIntegerUnit = (u) => integerUnits.includes(String(u || '').toLowerCase());
+
+/* ----------------------- core calc ----------------------- */
+
 const computeRemaining = (order) => {
   const received = order.receivedMap || {};
   return order.items.map((it) => {
     const key = String(it.itemId);
     const ordered = toNum(it.quantity, 0);
     const got = toNum(mget(received, key), 0);
-    const remaining = Math.max(ordered - got, 0);
+    // ✅ round remaining to 3 dp to avoid fp crumbs
+    const remaining = Math.max(roundTo(ordered - got, 3), 0);
     return {
       itemId: it.itemId,
       name: it.name,
@@ -44,9 +62,11 @@ const computeRemaining = (order) => {
   });
 };
 
-// ---- transactional receipt creation ----
+/* ----------------- transactional creation ---------------- */
+
 const createReceiptForOrder = async ({ orderId, items, notes, receivedAt }, useTxn = true) => {
   const session = useTxn ? await mongoose.startSession() : null;
+
   try {
     if (session) session.startTransaction();
 
@@ -56,7 +76,7 @@ const createReceiptForOrder = async ({ orderId, items, notes, receivedAt }, useT
     const remainingRows = computeRemaining(order);
     const byId = new Map(remainingRows.map((r) => [String(r.itemId), r]));
 
-    // if no items → take all remaining rows
+    // If no items given → take all remaining rows (remaining > 0)
     const targets = (items && items.length > 0)
       ? items
       : remainingRows
@@ -69,25 +89,41 @@ const createReceiptForOrder = async ({ orderId, items, notes, receivedAt }, useT
       throw err;
     }
 
+    // Build receipt items with validation (integer units must be integers)
     const receiptItems = targets.map((t) => {
       const key = String(t.itemId);
       const row = byId.get(key);
       if (!row) throw new Error('Item not in order');
 
-      const qty = toNum((t.quantity ?? row.remaining), NaN);
-      if (!Number.isFinite(qty) || qty <= 0) throw new Error('Invalid quantity');
-      if (qty > row.remaining) throw new Error('Quantity exceeds remaining');
+      // quantity normalization
+      const rawQty = t.quantity ?? row.remaining;
+      const qtyNum = toNum(rawQty, NaN);
+      if (!Number.isFinite(qtyNum) || qtyNum <= 0) throw new Error('Invalid quantity');
+      if (qtyNum > row.remaining) throw new Error('Quantity exceeds remaining');
+
+      // unit & integer enforcement
+      const unit = (row.unit || 'pcs').toLowerCase();
+      if (isIntegerUnit(unit) && !Number.isInteger(qtyNum)) {
+        const e = new Error(`Quantity must be an integer for unit "${unit}".`);
+        e.code = 'INVALID_INTEGER_QTY';
+        throw e;
+      }
+
+      // apply rounding only for non-integer units
+      const finalQty = isIntegerUnit(unit) ? qtyNum : roundTo(qtyNum, 3);
+      const rawPrice = t.unitPrice ?? row.unitPrice ?? 0;
+      const finalPrice = roundTo(toNum(rawPrice, 0), 3);
 
       return {
         itemId: row.itemId,
-        name: row.name, // snapshot from order
-        quantity: qty,
-        unit: row.unit || 'pcs',
-        unitPrice: toNum((t.unitPrice ?? row.unitPrice), 0),
+        name: row.name,               // snapshot from order
+        quantity: finalQty,           // ✅ normalized
+        unit,
+        unitPrice: finalPrice,        // ✅ normalized
       };
     });
 
-    // 1) create receipt
+    // 1) create receipt document
     const receiptArr = await Receipt.create([{
       orderId: order._id,
       items: receiptItems,
@@ -96,7 +132,7 @@ const createReceiptForOrder = async ({ orderId, items, notes, receivedAt }, useT
     }], { session });
     const saved = receiptArr[0];
 
-    // 2) increment inventory
+    // 2) increment inventory quantities
     for (const it of receiptItems) {
       await Inventory.findByIdAndUpdate(
         it.itemId,
@@ -105,17 +141,18 @@ const createReceiptForOrder = async ({ orderId, items, notes, receivedAt }, useT
       );
     }
 
-    // 3) update order.receivedMap
+    // 3) update order.receivedMap (✅ rounding applied here)
     const recMap = order.receivedMap || {};
     for (const it of receiptItems) {
       const key = String(it.itemId);
       const prev = toNum(mget(recMap, key), 0);
-      const next = prev + toNum(it.quantity, 0);
+      // ⬇️ 이 줄이 네가 헷갈린 포인트: 누적값에 roundTo 적용
+      const next = roundTo(prev + toNum(it.quantity, 0), 3);
       mset(recMap, key, next);
     }
     order.receivedMap = recMap;
 
-    // 4) update status
+    // 4) update order.status by remaining sum
     const after = computeRemaining(order);
     const totalOrdered = after.reduce((a, b) => a + toNum(b.ordered, 0), 0);
     const totalRemaining = after.reduce((a, b) => a + toNum(b.remaining, 0), 0);
@@ -124,7 +161,7 @@ const createReceiptForOrder = async ({ orderId, items, notes, receivedAt }, useT
     else if (totalRemaining === totalOrdered) order.status = 'pending';
     else order.status = 'partial';
 
-    // 5) system note
+    // 5) append system note
     order.notes = order.notes
       ? `${order.notes}\n[system] receipt updated via order integration at ${new Date().toISOString()}`
       : `[system] receipt updated via order integration at ${new Date().toISOString()}`;
