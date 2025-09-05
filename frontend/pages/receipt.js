@@ -6,7 +6,11 @@ export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState([]);
   const [refresh, setRefresh] = useState(0);
   const [sortBy, setSortBy] = useState('receivedAt'); // 'receivedAt' | 'createdAt'
+  const [sortDir, setSortDir] = useState('desc'); // 'desc' | 'asc'
   const [loading, setLoading] = useState(false);
+
+  // 🔎 Notes search
+  const [search, setSearch] = useState('');
 
   const refetch = () => setRefresh((n) => n + 1);
 
@@ -30,21 +34,26 @@ export default function ReceiptsPage() {
     };
   }, [refresh]);
 
-  const sortedReceipts = useMemo(() => {
-    const arr = Array.isArray(receipts) ? [...receipts] : [];
-    return arr.sort((a, b) => {
-      // 기본: receivedAt 기준, 비어 있으면 createdAt을 대체값으로 사용
-      const ak =
-        sortBy === 'receivedAt'
-          ? (a.receivedAt || a.createdAt || 0)
-          : (a.createdAt || 0);
-      const bk =
-        sortBy === 'receivedAt'
-          ? (b.receivedAt || b.createdAt || 0)
-          : (b.createdAt || 0);
-      return new Date(bk).getTime() - new Date(ak).getTime();
+  const filteredAndSorted = useMemo(() => {
+    const list = Array.isArray(receipts) ? [...receipts] : [];
+    const q = search.trim().toLowerCase();
+
+    const filtered = q
+      ? list.filter((r) => String(r.notes || '').toLowerCase().includes(q))
+      : list;
+
+    return filtered.sort((a, b) => {
+      const ak = sortBy === 'receivedAt'
+        ? (a.receivedAt || a.createdAt || 0)
+        : (a.createdAt || 0);
+      const bk = sortBy === 'receivedAt'
+        ? (b.receivedAt || b.createdAt || 0)
+        : (b.createdAt || 0);
+
+      const diff = new Date(bk).getTime() - new Date(ak).getTime();
+      return sortDir === 'desc' ? diff : -diff;
     });
-  }, [receipts, sortBy]);
+  }, [receipts, search, sortBy, sortDir]);
 
   return (
     <div className="p-6 space-y-6">
@@ -53,28 +62,43 @@ export default function ReceiptsPage() {
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Receipts</h1>
+
+        {/* Toolbar: search + sort */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Sort by</span>
-          <button
-            type="button"
-            className={`px-3 py-1 rounded border ${
-              sortBy === 'receivedAt' ? 'bg-black text-white' : ''
-            }`}
-            onClick={() => setSortBy('receivedAt')}
-            title="Sort by received date"
-          >
-            Received Date
-          </button>
-          <button
-            type="button"
-            className={`px-3 py-1 rounded border ${
-              sortBy === 'createdAt' ? 'bg-black text-white' : ''
-            }`}
-            onClick={() => setSortBy('createdAt')}
-            title="Sort by created date"
-          >
-            Created Date
-          </button>
+          <input
+            type="search"
+            className="border rounded px-3 py-2 w-64"
+            placeholder="Search by notes…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-gray-600">Sort by</span>
+            <button
+              type="button"
+              className={`px-3 py-1 rounded border ${sortBy === 'receivedAt' ? 'bg-black text-white' : ''}`}
+              onClick={() => setSortBy('receivedAt')}
+              title="Sort by received date"
+            >
+              Received Date
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 rounded border ${sortBy === 'createdAt' ? 'bg-black text-white' : ''}`}
+              onClick={() => setSortBy('createdAt')}
+              title="Sort by created date"
+            >
+              Created Date
+            </button>
+            <button
+              type="button"
+              className="px-3 py-1 rounded border"
+              onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
+              title="Toggle sort direction"
+            >
+              {sortDir === 'desc' ? 'Newest' : 'Oldest'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -94,14 +118,14 @@ export default function ReceiptsPage() {
                   Loading…
                 </td>
               </tr>
-            ) : sortedReceipts.length === 0 ? (
+            ) : filteredAndSorted.length === 0 ? (
               <tr>
                 <td className="p-4 text-center text-gray-500" colSpan={3}>
-                  No receipts yet.
+                  No receipts found.
                 </td>
               </tr>
             ) : (
-              sortedReceipts.map((r) => (
+              filteredAndSorted.map((r) => (
                 <tr key={r._id}>
                   <td className="p-2 border">
                     {r.receivedAt
@@ -114,7 +138,6 @@ export default function ReceiptsPage() {
                     {Array.isArray(r.items) && r.items.length > 0 ? (
                       r.items.map((i, idx) => (
                         <span key={`${r._id}-${idx}`} className="block">
-                          {/* 수량 소수점 표시는 서버 반올림 정책(예: 3dp)에 맞추어 표시 */}
                           {i.name} (+{Number(i.quantity)} {i.unit})
                         </span>
                       ))
