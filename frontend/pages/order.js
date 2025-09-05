@@ -1,5 +1,5 @@
 import OrderForm from '../components/OrderForm';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
 
 export default function OrdersPage() {
@@ -7,6 +7,9 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [refresh, setRefresh] = useState(0); // trigger refetch
   const [loadingId, setLoadingId] = useState(null); // per-row loading
+
+  // 🔎 Supplier search (client-only)
+  const [search, setSearch] = useState('');
 
   // Helpers
   const refetch = () => setRefresh((n) => n + 1);
@@ -79,13 +82,34 @@ export default function OrdersPage() {
     return <span className={`px-2 py-1 rounded ${cls}`}>{s}</span>;
   };
 
+  // 🔎 client-side filter by supplier
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter((o) => String(o.supplier || '').toLowerCase().includes(q));
+  }, [orders, search]);
+
   return (
     <div className="p-6 space-y-6">
       {/* Create Order */}
       <OrderForm onCreated={refetch} />
 
+      {/* Toolbar */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Orders</h1>
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            className="border rounded px-3 py-2 w-64"
+            placeholder="Search by supplier…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <span className="text-sm text-gray-500">{filtered.length} / {orders.length}</span>
+        </div>
+      </div>
+
       {/* Orders Table */}
-      <h1 className="text-2xl font-bold">Orders</h1>
       <div className="overflow-x-auto">
         <table className="w-full border border-gray-300 text-left">
           <thead className="bg-gray-100">
@@ -98,7 +122,7 @@ export default function OrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {orders.map((order) => {
+            {filtered.map((order) => {
               const isRowLoading = loadingId === order._id;
               const s = order.status || 'pending';
               const receiveLabel = s === 'partial' ? 'Receive Remaining' : 'Receive All';
@@ -159,10 +183,10 @@ export default function OrdersPage() {
               );
             })}
 
-            {orders.length === 0 && (
+            {filtered.length === 0 && (
               <tr>
                 <td className="p-4 text-center text-gray-500" colSpan={5}>
-                  No orders yet.
+                  No orders found.
                 </td>
               </tr>
             )}
