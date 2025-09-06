@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import api from '../services/api';
 
 /**
@@ -156,6 +157,7 @@ const ReceiptForm = ({ onCreated }) => {
     const msg = validate();
     if (msg) {
       setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -184,6 +186,8 @@ const ReceiptForm = ({ onCreated }) => {
         await api.post('/receipt', payload);
       }
 
+      toast.success('Receipt created.');
+      // reset
       setItems([{ itemId: '', name: '', unit: '', quantity: 1, unitPrice: 0 }]);
       setReceivedAt('');
       setNotes('');
@@ -194,6 +198,7 @@ const ReceiptForm = ({ onCreated }) => {
       console.error(e);
       const msgText = e?.response?.data?.error || 'Failed to create receipt.';
       setError(msgText);
+      toast.error(msgText);
     } finally {
       setSubmitting(false);
     }
