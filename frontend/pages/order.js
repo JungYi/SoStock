@@ -1,5 +1,6 @@
 import OrderForm from '../components/OrderForm';
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import api from '../services/api';
 
 const SortButton = ({ label, field, sortBy, sortDir, onChange }) => {
@@ -19,12 +20,10 @@ const SortButton = ({ label, field, sortBy, sortDir, onChange }) => {
 };
 
 export default function OrdersPage() {
-  // State
   const [orders, setOrders] = useState([]);
   const [refresh, setRefresh] = useState(0);
   const [loadingId, setLoadingId] = useState(null);
 
-  // Search & Sort
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('createdAt'); // 'createdAt' | 'supplier' | 'status'
   const [sortDir, setSortDir] = useState('desc'); // 'asc' | 'desc'
@@ -40,6 +39,7 @@ export default function OrdersPage() {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('❌ Failed to fetch orders:', err);
+        toast.error('Failed to load orders.');
       }
     };
     fetchOrders();
@@ -55,10 +55,10 @@ export default function OrdersPage() {
     try {
       setLoadingId(orderId);
       await api.patch(`/order/${orderId}/status`, { status: 'canceled' });
+      toast.success('Order canceled.');
       refetch();
     } catch (err) {
-      // eslint-disable-next-line no-alert
-      alert('Failed to cancel order.');
+      toast.error('Failed to cancel order.');
     } finally {
       setLoadingId(null);
     }
@@ -68,13 +68,16 @@ export default function OrdersPage() {
     if (!orderId) return;
     try {
       setLoadingId(orderId);
-      await api.post(`/order/${orderId}/receipt`, {});
+      await api.post(`/order/${orderId}/receipt`, {}); // server calculates remaining
+      toast.success('Items received successfully.');
       refetch();
     } catch (err) {
       const status = err?.response?.status;
-      // eslint-disable-next-line no-alert
-      if (status === 409) alert('Already fully received.');
-      else alert('Failed to auto receive.');
+      if (status === 409) {
+        toast('Already fully received.', { icon: 'ℹ️' });
+      } else {
+        toast.error('Failed to auto receive.');
+      }
     } finally {
       setLoadingId(null);
     }
@@ -95,13 +98,11 @@ export default function OrdersPage() {
     return <span className={`px-2 py-1 rounded ${cls}`}>{s}</span>;
   };
 
-  // filter + sort (client-side)
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const base = q
       ? orders.filter((o) => String(o.supplier || '').toLowerCase().includes(q))
       : orders;
-
     const dir = sortDir === 'asc' ? 1 : -1;
     return [...base].sort((a, b) => {
       if (sortBy === 'supplier') {
@@ -110,7 +111,6 @@ export default function OrdersPage() {
       if (sortBy === 'status') {
         return String(a.status || '').localeCompare(String(b.status || '')) * dir;
       }
-      // createdAt
       const ad = new Date(a.createdAt || 0).getTime();
       const bd = new Date(b.createdAt || 0).getTime();
       return (ad - bd) * dir;
@@ -130,7 +130,6 @@ export default function OrdersPage() {
     <div className="p-6 space-y-6">
       <OrderForm onCreated={refetch} />
 
-      {/* Toolbar */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold">Orders</h1>
         <div className="flex items-center gap-3">
@@ -145,7 +144,6 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full border border-gray-300 text-left">
           <thead className="bg-gray-100">
