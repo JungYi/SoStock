@@ -2,15 +2,33 @@ import { useEffect, useMemo, useState } from 'react';
 import ReceiptForm from '../components/ReceiptForm';
 import api from '../services/api';
 
+const SortButton = ({ label, field, sortBy, sortDir, onField, onDir }) => {
+  const active = sortBy === field;
+  const icon = active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
+  return (
+    <button
+      type="button"
+      className={`px-3 py-1 rounded border ${active ? 'bg-black text-white' : ''}`}
+      onClick={() => {
+        if (active) onDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+        else onField(field);
+      }}
+      title={`Sort by ${label}`}
+    >
+      {label} <span className="text-xs">{icon}</span>
+    </button>
+  );
+};
+
 export default function ReceiptsPage() {
   const [receipts, setReceipts] = useState([]);
   const [refresh, setRefresh] = useState(0);
-  const [sortBy, setSortBy] = useState('receivedAt'); // 'receivedAt' | 'createdAt'
-  const [sortDir, setSortDir] = useState('desc'); // 'desc' | 'asc'
   const [loading, setLoading] = useState(false);
 
-  // 🔎 Notes search
+  // Search & Sort
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('receivedAt'); // 'receivedAt' | 'createdAt'
+  const [sortDir, setSortDir] = useState('desc'); // 'desc' | 'asc'
 
   const refetch = () => setRefresh((n) => n + 1);
 
@@ -60,10 +78,9 @@ export default function ReceiptsPage() {
       {/* Create Receipt (with optional Order prefill) */}
       <ReceiptForm onCreated={refetch} />
 
-      <div className="flex items-center justify-between">
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold">Receipts</h1>
-
-        {/* Toolbar: search + sort */}
         <div className="flex items-center gap-2">
           <input
             type="search"
@@ -72,36 +89,32 @@ export default function ReceiptsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <span className="text-sm text-gray-500">
+            {filteredAndSorted.length} / {receipts.length}
+          </span>
           <div className="flex items-center gap-1">
-            <span className="text-sm text-gray-600">Sort by</span>
-            <button
-              type="button"
-              className={`px-3 py-1 rounded border ${sortBy === 'receivedAt' ? 'bg-black text-white' : ''}`}
-              onClick={() => setSortBy('receivedAt')}
-              title="Sort by received date"
-            >
-              Received Date
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1 rounded border ${sortBy === 'createdAt' ? 'bg-black text-white' : ''}`}
-              onClick={() => setSortBy('createdAt')}
-              title="Sort by created date"
-            >
-              Created Date
-            </button>
-            <button
-              type="button"
-              className="px-3 py-1 rounded border"
-              onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
-              title="Toggle sort direction"
-            >
-              {sortDir === 'desc' ? 'Newest' : 'Oldest'}
-            </button>
+            <span className="text-sm text-gray-600">Sort</span>
+            <SortButton
+              label="Received Date"
+              field="receivedAt"
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onField={setSortBy}
+              onDir={setSortDir}
+            />
+            <SortButton
+              label="Created Date"
+              field="createdAt"
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onField={setSortBy}
+              onDir={setSortDir}
+            />
           </div>
         </div>
       </div>
 
+      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full border border-gray-300 text-left">
           <thead className="bg-gray-100">
