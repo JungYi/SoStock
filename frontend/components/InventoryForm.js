@@ -1,228 +1,114 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import api from '../services/api';
-import toast from 'react-hot-toast';
 
-const VALID_UNITS = ['pcs', 'kg', 'g', 'ml', 'l', 'pack'];
-const DEFAULT = { name: '', category: '', quantity: '', unit: 'pcs' };
+const UNITS = ['pcs', 'pack', 'kg', 'g', 'l', 'ml'];
 
-const sanitize = (v = '') => v.replace(/\s+/g, ' ').trim();
-
-const validate = (form) => {
-  const errors = {};
-  const name = sanitize(form.name);
-  const category = sanitize(form.category);
-  const qtyNum = Number(form.quantity);
-
-  if (!name) errors.name = 'Name is required.';
-  if (form.quantity === '' || Number.isNaN(qtyNum)) {
-    errors.quantity = 'Quantity is required.';
-  } else if (qtyNum < 1) {
-    errors.quantity = 'Quantity must be ≥ 1.';
-  }
-  if (!VALID_UNITS.includes(form.unit)) errors.unit = 'Invalid unit.';
-
-  if (!category) errors.category = 'Category is required.';
-
-  return errors;
-};
-
-const InventoryForm = ({ onAdd, editItem, onUpdate }) => {
-  const [form, setForm] = useState(DEFAULT);
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
+export default function InventoryForm({ onAdd, onUpdate, editItem }) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [brand, setBrand] = useState(''); // ✅ NEW
+  const [quantity, setQuantity] = useState(0);
+  const [unit, setUnit] = useState('pcs');
   const [submitting, setSubmitting] = useState(false);
-
-  const nameRef = useRef(null);
-  const categoryRef = useRef(null);
-  const quantityRef = useRef(null);
-  const unitRef = useRef(null);
 
   useEffect(() => {
     if (editItem) {
-      const { name, category, quantity, unit } = editItem;
-      setForm({
-        name: name || '',
-        category: category || '',
-        quantity: String(quantity ?? ''),
-        unit: VALID_UNITS.includes(unit) ? unit : 'pcs',
-      });
-      setErrors({});
-      setTouched({});
+      setName(editItem.name || '');
+      setCategory(editItem.category || '');
+      setBrand(editItem.brand || ''); // ✅ NEW
+      setQuantity(editItem.quantity ?? 0);
+      setUnit(editItem.unit || 'pcs');
     } else {
-      setForm(DEFAULT);
-      setErrors({});
-      setTouched({});
+      setName('');
+      setCategory('');
+      setBrand(''); // ✅
+      setQuantity(0);
+      setUnit('pcs');
     }
   }, [editItem]);
 
-  const currentErrors = useMemo(() => validate(form), [form]);
-  const isValid = useMemo(() => Object.keys(currentErrors).length === 0, [currentErrors]);
-
-  const showError = (field) =>
-    touched[field] ? (errors[field] || currentErrors[field]) : null;
-
-  const inputCls = (field) =>
-    `border px-2 py-1 w-full ${showError(field) ? 'border-red-600' : 'border-gray-300'}`;
-
-  const onChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+  const validate = () => {
+    if (!name.trim()) return 'Name is required.';
+    if (Number(quantity) < 0) return 'Quantity must be ≥ 0.';
+    return '';
   };
 
-  const onBlur = (e) => {
-    const { name } = e.target;
-    setTouched((prev) => ({ ...prev, [name]: true }));
-  };
-
-  const focusFirstError = (errs) => {
-    const order = ['name', 'category', 'quantity', 'unit'];
-    const first = order.find((f) => errs[f]);
-    if (!first) return;
-    const map = { name: nameRef, category: categoryRef, quantity: quantityRef, unit: unitRef };
-    map[first]?.current?.focus();
-  };
-
-  const onSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setTouched({ name: true, category: true, quantity: true, unit: true });
-    const finalErrors = validate(form);
-    setErrors(finalErrors);
-    if (Object.keys(finalErrors).length) {
-      focusFirstError(finalErrors);
-      return;
-    }
+    const msg = validate();
+    if (msg) return toast.error(msg);
 
-    setSubmitting(true);
     try {
+      setSubmitting(true);
       const payload = {
-        name: sanitize(form.name),
-        category: sanitize(form.category),
-        quantity: Number(form.quantity),
-        unit: form.unit,
+        name: name.trim(),
+        category: category.trim(),
+        brand: brand.trim(), // ✅
+        quantity: Number(quantity),
+        unit,
       };
 
-      const request = editItem
-        ? api.put(`/inventory/${editItem._id}`, payload)
-        : api.post('/inventory', payload);
-
-      await toast.promise(
-        request,
-        {
-          loading: editItem ? 'Updating item…' : 'Adding item…',
-          success: editItem ? 'Item updated' : 'Item added',
-          error: (err) => err?.response?.data?.error || 'Failed to save item.',
-        },
-        { duration: 3500 }
-      );
-
-      setForm(DEFAULT);
-      setTouched({});
-      if (editItem) onUpdate?.(); else onAdd?.();
+      if (editItem?._id) {
+        await api.put(`/inventory/${editItem._id}`, payload);
+        toast.success('Item updated.');
+        if (onUpdate) onUpdate();
+      } else {
+        await api.post('/inventory', payload);
+        toast.success('Item added.');
+        if (onAdd) onAdd();
+      }
+    } catch (err) {
+      toast.error('Failed to save item.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3" noValidate>
-      <h2 className="text-xl font-semibold">
-        {editItem ? 'Edit Inventory Item' : 'Add Inventory Item'}
-      </h2>
-
-      <div>
-        <input
-          ref={nameRef}
-          name="name"
-          value={form.name}
-          onChange={onChange}
-          onBlur={onBlur}
-          placeholder="Name"
-          className={inputCls('name')}
-          aria-invalid={!!showError('name')}
-          aria-describedby="name-error"
-        />
-        {showError('name') && (
-          <p id="name-error" className="text-red-600 text-sm mt-1" aria-live="polite">
-            {showError('name')}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <input
-          ref={categoryRef}
-          name="category"
-          value={form.category}
-          onChange={onChange}
-          onBlur={onBlur}
-          placeholder="Category"
-          className={inputCls('category')}
-          aria-invalid={!!showError('category')}
-          aria-describedby="category-error"
-        />
-        {showError('category') && (
-          <p id="category-error" className="text-red-600 text-sm mt-1" aria-live="polite">
-            {showError('category')}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <input
-          ref={quantityRef}
-          name="quantity"
-          value={form.quantity}
-          onChange={onChange}
-          onBlur={onBlur}
-          type="number"
-          placeholder="Quantity"
-          className={inputCls('quantity')}
-          min={1}
-          step="1"
-          inputMode="numeric"
-          aria-invalid={!!showError('quantity')}
-          aria-describedby="quantity-error"
-        />
-        {showError('quantity') && (
-          <p id="quantity-error" className="text-red-600 text-sm mt-1" aria-live="polite">
-            {showError('quantity')}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <select
-          ref={unitRef}
-          name="unit"
-          value={form.unit}
-          onChange={onChange}
-          onBlur={onBlur}
-          className={inputCls('unit')}
-          aria-invalid={!!showError('unit')}
-          aria-describedby="unit-error"
-        >
-          {VALID_UNITS.map((u) => (
-            <option key={u} value={u}>
-              {u}
-            </option>
-          ))}
-        </select>
-        {showError('unit') && (
-          <p id="unit-error" className="text-red-600 text-sm mt-1" aria-live="polite">
-            {showError('unit')}
-          </p>
-        )}
-      </div>
-
-      <button
-        type="submit"
-        disabled={submitting || !isValid}
-        className="bg-black text-white px-4 py-2 rounded disabled:opacity-60"
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <input
+        className="input w-full"
+        placeholder="Name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        className="input w-full"
+        placeholder="Category"
+        value={category}
+        onChange={(e) => setCategory(e.target.value)}
+      />
+      <input
+        className="input w-full"
+        placeholder="Brand (optional)"
+        value={brand}
+        onChange={(e) => setBrand(e.target.value)}
+      />
+      <input
+        type="number"
+        className="input w-full"
+        placeholder="Quantity"
+        value={quantity}
+        onChange={(e) => setQuantity(e.target.value)}
+        min="0"
+        step="1"
+      />
+      <select
+        className="input w-full"
+        value={unit}
+        onChange={(e) => setUnit(e.target.value)}
       >
-        {editItem ? 'Update' : 'Add'}
-      </button>
+        {UNITS.map((u) => (
+          <option key={u} value={u}>{u}</option>
+        ))}
+      </select>
+
+      <div className="pt-2">
+        <button type="submit" className="btn btn-primary" disabled={submitting}>
+          {submitting ? 'Saving…' : (editItem ? 'Update' : 'Add')}
+        </button>
+      </div>
     </form>
   );
-};
-
-export default InventoryForm;
+}

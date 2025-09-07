@@ -28,10 +28,11 @@ export default function InventoryList({ onEdit, onDelete }) {
   const [q, setQ] = useState('');
   const qDebounced = useDebounce(q, 300);
 
-  const [sortBy, setSortBy] = useState('updatedAt'); // 'name' | 'updatedAt' | 'quantity'
+  // 'name' | 'category' | 'brand' | 'quantity' | 'updatedAt'
+  const [sortBy, setSortBy] = useState('updatedAt');
   const [sortDir, setSortDir] = useState('desc'); // 'asc' | 'desc'
 
-  // refresh trigger: 이 컴포넌트는 부모에서 key로 강제 리렌더 처리 중
+  // 최초 로드 (부모가 key로 리마운트하므로 의존성 X)
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -52,33 +53,41 @@ export default function InventoryList({ onEdit, onDelete }) {
     return () => {
       mounted = false;
     };
-  }, []); // 최초 1회 (부모가 key로 새로 마운트함)
+  }, []);
 
   const handleSortChange = (field) => {
     if (sortBy === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortBy(field);
-      setSortDir(field === 'name' ? 'asc' : 'desc');
+      // 문자열은 asc, 날짜/숫자는 desc를 기본으로
+      if (['name', 'category', 'brand'].includes(field)) setSortDir('asc');
+      else setSortDir('desc');
     }
   };
 
-  // filter + sort
+  // filter + sort (디바운스 적용)
   const viewRows = useMemo(() => {
     const keyword = qDebounced.trim().toLowerCase();
+
     const filtered = keyword
       ? items.filter((it) => {
           const name = String(it.name || '').toLowerCase();
           const cat = String(it.category || '').toLowerCase();
-          return name.includes(keyword) || cat.includes(keyword);
+          const brand = String(it.brand || '').toLowerCase();
+          return (
+            name.includes(keyword) ||
+            cat.includes(keyword) ||
+            brand.includes(keyword)
+          );
         })
       : items;
 
-    const sorted = [...filtered].sort((a, b) => {
-      const dir = sortDir === 'asc' ? 1 : -1;
+    const dir = sortDir === 'asc' ? 1 : -1;
 
-      if (sortBy === 'name') {
-        return String(a.name || '').localeCompare(String(b.name || '')) * dir;
+    const sorted = [...filtered].sort((a, b) => {
+      if (['name', 'category', 'brand'].includes(sortBy)) {
+        return String(a[sortBy] || '').localeCompare(String(b[sortBy] || '')) * dir;
       }
       if (sortBy === 'quantity') {
         return ((a.quantity || 0) - (b.quantity || 0)) * dir;
@@ -100,8 +109,8 @@ export default function InventoryList({ onEdit, onDelete }) {
         <div className="flex items-center gap-2">
           <input
             type="search"
-            className="border rounded px-3 py-2 w-64"
-            placeholder="Search by name or category…"
+            className="border rounded px-3 py-2 w-72"
+            placeholder="Search name / category / brand…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -125,7 +134,24 @@ export default function InventoryList({ onEdit, onDelete }) {
                   onChange={handleSortChange}
                 />
               </th>
-              <th className="p-2 border">Category</th>
+              <th className="p-2 border">
+                <SortButton
+                  label="Category"
+                  field="category"
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onChange={handleSortChange}
+                />
+              </th>
+              <th className="p-2 border">
+                <SortButton
+                  label="Brand"
+                  field="brand"
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onChange={handleSortChange}
+                />
+              </th>
               <th className="p-2 border">
                 <SortButton
                   label="Qty"
@@ -151,18 +177,19 @@ export default function InventoryList({ onEdit, onDelete }) {
           <tbody>
             {loading ? (
               <tr>
-                <td className="p-4 text-gray-500" colSpan={6}>Loading…</td>
+                <td className="p-4 text-gray-500" colSpan={7}>Loading…</td>
               </tr>
             ) : viewRows.length === 0 ? (
               <tr>
-                <td className="p-4 text-gray-500" colSpan={6}>No items found.</td>
+                <td className="p-4 text-gray-500" colSpan={7}>No items found.</td>
               </tr>
             ) : (
               viewRows.map((it) => (
                 <tr key={it._id}>
                   <td className="p-2 border">{it.name}</td>
                   <td className="p-2 border">{it.category || '-'}</td>
-                  <td className="p-2 border">{it.quantity}</td>
+                  <td className="p-2 border">{it.brand || '-'}</td>
+                  <td className="p-2 border">{Number(it.quantity)}</td>
                   <td className="p-2 border">{it.unit}</td>
                   <td className="p-2 border">
                     {new Date(it.updatedAt || it.createdAt).toLocaleDateString()}
