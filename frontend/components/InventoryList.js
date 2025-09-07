@@ -93,7 +93,7 @@ export default function InventoryList({ onEdit, onDelete }) {
   }, [items, qDebounced, sortBy, sortDir]);
 
   return (
-    <div className="rounded-2xl bg-white shadow-sm p-4">
+    <div className="card">
       {/* Toolbar */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-3">
         <h2 className="text-xl font-semibold">Inventory</h2>

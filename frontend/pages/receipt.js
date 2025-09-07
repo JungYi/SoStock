@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import ReceiptForm from '../components/ReceiptForm';
 import api from '../services/api';
 
@@ -8,7 +9,7 @@ const SortButton = ({ label, field, sortBy, sortDir, onField, onDir }) => {
   return (
     <button
       type="button"
-      className={`px-3 py-1 rounded border ${active ? 'bg-black text-white' : ''}`}
+      className={`btn ${active ? 'btn-primary' : ''}`}
       onClick={() => {
         if (active) onDir((d) => (d === 'desc' ? 'asc' : 'desc'));
         else onField(field);
@@ -42,6 +43,7 @@ export default function ReceiptsPage() {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('Failed to fetch receipts:', err);
+        toast.error('Failed to load receipts.');
       } finally {
         setLoading(false);
       }
@@ -74,17 +76,20 @@ export default function ReceiptsPage() {
   }, [receipts, search, sortBy, sortDir]);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Create Receipt (with optional Order prefill) */}
-      <ReceiptForm onCreated={refetch} />
+    <div className="p-6 space-y-6 bg-brand-bg min-h-screen">
+      {/* Create Receipt */}
+      <div className="card">
+        <ReceiptForm onCreated={refetch} />
+      </div>
 
       {/* Toolbar */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold">Receipts</h1>
+
         <div className="flex items-center gap-2">
           <input
             type="search"
-            className="border rounded px-3 py-2 w-64"
+            className="input w-64"
             placeholder="Search by notes…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -92,8 +97,7 @@ export default function ReceiptsPage() {
           <span className="text-sm text-gray-500">
             {filteredAndSorted.length} / {receipts.length}
           </span>
-          <div className="flex items-center gap-1">
-            <span className="text-sm text-gray-600">Sort</span>
+          <div className="flex items-center gap-2">
             <SortButton
               label="Received Date"
               field="receivedAt"
@@ -110,18 +114,26 @@ export default function ReceiptsPage() {
               onField={setSortBy}
               onDir={setSortDir}
             />
+            <button
+              type="button"
+              className="btn btn-muted"
+              onClick={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
+              title="Toggle sort direction"
+            >
+              {sortDir === 'desc' ? 'Newest' : 'Oldest'}
+            </button>
           </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full border border-gray-300 text-left">
-          <thead className="bg-gray-100">
+      <div className="overflow-x-auto card">
+        <table className="table">
+          <thead>
             <tr>
-              <th className="p-2 border">Received At</th>
-              <th className="p-2 border">Items</th>
-              <th className="p-2 border">Notes</th>
+              <th>Received At</th>
+              <th>Items</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -140,14 +152,14 @@ export default function ReceiptsPage() {
             ) : (
               filteredAndSorted.map((r) => (
                 <tr key={r._id}>
-                  <td className="p-2 border">
+                  <td>
                     {r.receivedAt
                       ? new Date(r.receivedAt).toLocaleDateString()
                       : (r.createdAt
                           ? new Date(r.createdAt).toLocaleDateString()
                           : '-')}
                   </td>
-                  <td className="p-2 border">
+                  <td>
                     {Array.isArray(r.items) && r.items.length > 0 ? (
                       r.items.map((i, idx) => (
                         <span key={`${r._id}-${idx}`} className="block">
@@ -158,7 +170,7 @@ export default function ReceiptsPage() {
                       <span className="text-gray-500">No items</span>
                     )}
                   </td>
-                  <td className="p-2 border">{r.notes || '-'}</td>
+                  <td>{r.notes || '-'}</td>
                 </tr>
               ))
             )}

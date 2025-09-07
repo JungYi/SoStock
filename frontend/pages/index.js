@@ -68,7 +68,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6 bg-brand-bg min-h-screen">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label="Total Stock Items" value={loading ? '—' : stats.items} />
         <StatCard label="Pending Orders" value={loading ? '—' : stats.pending} />
