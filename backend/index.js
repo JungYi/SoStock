@@ -16,11 +16,13 @@ mongoose.connect(process.env.MONGODB_URI)
 const inventoryRoutes = require('./routes/inventory');
 const orderRoutes = require('./routes/order');
 const receiptRoutes = require('./routes/receipt');
+const metaRoutes = require('./routes/meta');
 
 // Mount routers
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/order', orderRoutes);
 app.use('/api/receipt', receiptRoutes);
+app.use('/api/meta', metaRoutes);
 
 // Default Route
 app.get('/', (req, res) => {

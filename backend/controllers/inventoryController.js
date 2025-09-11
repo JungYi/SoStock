@@ -13,17 +13,18 @@ const getInventoryList = async (_req, res) => {
 // [POST] /api/inventory
 const createInventoryItem = async (req, res) => {
   try {
-    const { name, category, brand, quantity, unit } = req.body;
-    const newItem = new Inventory({
-      name,
-      category: category || '',
-      brand: brand || '',
-      quantity,
-      unit: unit || 'pcs',
+    const { name, brand = '', category = 'Uncategorized', quantity, unit } = req.body;
+    const doc = new Inventory({
+      name: String(name).trim(),
+      brand: String(brand).trim(),
+      category: String(category).trim() || 'Uncategorized',
+      quantity: Number(quantity),
+      unit: String(unit).trim(),
     });
-    const savedItem = await newItem.save();
-    return res.status(201).json(savedItem);
+    const saved = await doc.save();
+    return res.status(201).json(saved);
   } catch (err) {
+    console.error('[inventory:create] ', err?.message, err?.errors);
     return res.status(400).json({ error: 'Invalid inventory data.' });
   }
 };
