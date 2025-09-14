@@ -27,9 +27,10 @@ export default function InventoryPage() {
     try {
       await api.delete(`/inventory/${id}`);
       refetch();
-    } catch (err) {
+    } catch (e) {
       // eslint-disable-next-line no-alert
-      alert('Failed to delete item');
+      console.error('❌ Failed to delete item:', e);
+      toast.error('Failed to delete item.');
     }
   };
 

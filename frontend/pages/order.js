@@ -60,7 +60,8 @@ export default function OrdersPage() {
       await api.patch(`/order/${orderId}/status`, { status: 'canceled' });
       toast.success('Order canceled.');
       refetch();
-    } catch (err) {
+    } catch (e) {
+      console.error('❌ Failed to cancel order:', e);
       toast.error('Failed to cancel order.');
     } finally {
       setLoadingId(null);
