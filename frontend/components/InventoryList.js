@@ -198,7 +198,7 @@ export default function InventoryList({ onEdit, onDelete }) {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        className="px-2 py-1 rounded bg-gray-800 text-white"
+                        className="btn btn-neutral"
                         onClick={() => onEdit?.(it)}
                         title="Edit"
                       >
@@ -206,7 +206,7 @@ export default function InventoryList({ onEdit, onDelete }) {
                       </button>
                       <button
                         type="button"
-                        className="px-2 py-1 rounded bg-red-600 text-white"
+                        className="btn btn-danger"
                         onClick={() => onDelete?.(it._id)}
                         title="Delete"
                       >

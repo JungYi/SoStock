@@ -16,17 +16,21 @@
   .btn { @apply inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-60 disabled:cursor-not-allowed; }
   .btn-primary { @apply btn bg-brand-ink text-white hover:opacity-90; }
   .btn-accent  { @apply btn bg-brand-accent text-white hover:opacity-90; }
+  .btn-neutral { @apply btn bg-gray-800 text-white hover:opacity-90; }
   .btn-muted   { @apply btn bg-gray-700 text-white hover:opacity-90; }
-  .btn-danger  { @apply btn bg-state-danger text-white hover:opacity-90; }
+  .btn-danger  { @apply btn bg-coffee-600 text-white hover:opacity-90; }
+  /* .btn-danger  { @apply btn bg-state-danger text-white hover:opacity-90; } */
+
+  /* 커피 팔레트 버튼 */
+  .btn-coffee  { @apply btn bg-coffee-600 text-white hover:bg-coffee-700; }
 
   .badge { @apply inline-flex items-center rounded px-2 py-0.5 text-xs font-medium; }
-  .badge-pending  { @apply badge bg-yellow-200 text-yellow-800; }
+  .badge-pending  { @apply badge bg-brand-accent text-mocha-100; }
   .badge-partial  { @apply badge bg-indigo-600 text-white; }
-  .badge-received { @apply badge bg-green-600 text-white; }
-  .badge-canceled { @apply badge bg-gray-600 text-white; }
+  .badge-received { @apply badge bg-coffee-600 text-white; }
+  .badge-canceled { @apply badge bg-gray-700 text-white; }
 
   .input  { @apply block w-full border rounded px-3 py-2 text-sm h-10 bg-white; }
-
   .select { @apply block w-full border rounded px-3 py-2 text-sm h-10 bg-white; }
 
   .table { @apply w-full border border-gray-300 text-left; }

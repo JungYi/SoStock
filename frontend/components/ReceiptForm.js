@@ -290,7 +290,7 @@ const ReceiptForm = ({ onCreated }) => {
                   <td className="p-2 border">
                     <button
                       type="button"
-                      className="text-red-600"
+                      className="text-coffee-600 hover:underline"
                       onClick={() => removeRow(idx)}
                       disabled={items.length === 1}
                       title={items.length === 1 ? 'At least one item' : 'Remove'}

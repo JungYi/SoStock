@@ -21,6 +21,19 @@ module.exports = {
           danger:  '#dc2626',
           info:    '#4f46e5',
         },
+        sand: {
+          50: '#F7F2EC',
+          100: '#F0E7DD',
+          200: '#E6DAC8',
+        },
+        coffee: {
+          600: '#6B4E3D',
+          700: '#5A3F31',
+        },
+        mocha: {
+          100: '#EBDDD2',
+          200: '#DCC7B7',
+        },
       },
       fontFamily: {
         // 시스템 기본 + 보기 좋은 대체 폰트
