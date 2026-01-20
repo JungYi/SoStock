@@ -1,6 +1,6 @@
 import type { AppProps } from 'next/app';
 import { Toaster } from 'react-hot-toast';
-import '../src/styles/globals.css';
+import '../styles/globals.css';
 import Layout from '../components/Layout';
 
 export default function MyApp({ Component, pageProps }: AppProps) {
